@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Deploy credentials for reposilite; the token comes from the environment, never from this file. -->
+<settings>
+    <servers>
+        <server>
+            <id>reposilite</id>
+            <username>${env.REPOSILITE_USER}</username>
+            <password>${env.REPOSILITE_TOKEN}</password>
+        </server>
+    </servers>
+</settings>

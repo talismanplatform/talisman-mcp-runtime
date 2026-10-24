@@ -1,0 +1,7 @@
+# Checks the suite cannot run against the runtime: each needs a diagnostic tool for a feature the runtime does not
+# serve (sampling, streaming elicitation, logging), and reports "Not testable" as a failure.
+server:
+  - server-stateless:sep-2575-server-rejects-undeclared-capability
+  - server-stateless:sep-2575-missing-capability-http-400
+  - server-stateless:sep-2575-http-server-no-independent-requests-on-stream
+  - server-stateless:sep-2575-server-no-log-without-loglevel

@@ -1,0 +1,148 @@
+{
+  "info": {
+    "name": "conformance-server",
+    "version": "1.0.0"
+  },
+  "tools": {
+    "test_simple_text": {
+      "route": "direct:conformance-text",
+      "description": "Returns simple text content",
+      "inputSchema": {
+        "type": "object"
+      }
+    },
+    "test_error_handling": {
+      "route": "direct:fail",
+      "description": "Always fails",
+      "inputSchema": {
+        "type": "object"
+      }
+    },
+    "json_schema_2020_12_tool": {
+      "route": "direct:conformance-text",
+      "description": "Has a JSON Schema 2020-12 input schema",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "$defs": {
+          "address": {
+            "type": "object",
+            "properties": {
+              "street": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string"
+              }
+            },
+            "$anchor": "address"
+          }
+        },
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "$ref": "#/$defs/address"
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "anyOf": [
+              {
+                "required": [
+                  "name"
+                ]
+              },
+              {
+                "required": [
+                  "address"
+                ]
+              }
+            ]
+          }
+        ],
+        "if": {
+          "properties": {
+            "name": {
+              "const": "admin"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "address"
+          ]
+        },
+        "else": {}
+      }
+    },
+    "test_custom_headers": {
+      "route": "direct:conformance-text",
+      "description": "Has x-mcp-header parameters",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "string",
+            "x-mcp-header": "Region"
+          },
+          "priority": {
+            "type": "integer",
+            "x-mcp-header": "Priority"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "region",
+          "query"
+        ]
+      }
+    }
+  },
+  "resources": {
+    "static-text": {
+      "route": "direct:conformance-text",
+      "uri": "test://static-text",
+      "description": "A text resource",
+      "mimeType": "text/plain"
+    },
+    "static-binary": {
+      "route": "direct:logo",
+      "uri": "test://static-binary",
+      "description": "A binary resource",
+      "mimeType": "image/png"
+    },
+    "template": {
+      "route": "direct:customer",
+      "uriTemplate": "test://template/{id}/data",
+      "description": "A templated resource",
+      "mimeType": "application/json"
+    }
+  },
+  "prompts": {
+    "test_simple_prompt": {
+      "route": "direct:conformance-prompt",
+      "description": "A prompt without arguments"
+    },
+    "test_prompt_with_arguments": {
+      "route": "direct:conformance-prompt",
+      "description": "A prompt with arguments",
+      "arguments": [
+        {
+          "name": "arg1",
+          "description": "First argument",
+          "required": true
+        },
+        {
+          "name": "arg2",
+          "description": "Second argument",
+          "required": true
+        }
+      ]
+    }
+  }
+}

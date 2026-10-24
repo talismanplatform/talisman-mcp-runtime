@@ -1,0 +1,10 @@
+{
+  "info": { "name": "broken", "version": "1.0.0" },
+  "tools": {
+    "nowhere": {
+      "route": "direct:nowhere",
+      "description": "No route consumes it",
+      "inputSchema": { "type": "object" }
+    }
+  }
+}

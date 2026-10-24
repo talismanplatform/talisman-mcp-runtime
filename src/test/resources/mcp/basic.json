@@ -1,0 +1,92 @@
+{
+  "info": {
+    "name": "test-server",
+    "version": "1.0.0",
+    "title": "Test Server",
+    "instructions": "Use greet to say hello."
+  },
+  "tools": {
+    "greet": {
+      "route": "direct:greet",
+      "description": "Says hello",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "name": { "type": "string" } },
+        "required": ["name"]
+      },
+      "annotations": { "readOnlyHint": true }
+    },
+    "add": {
+      "route": "direct:add",
+      "description": "Adds two integers",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "a": { "type": "integer" }, "b": { "type": "integer" } },
+        "required": ["a", "b"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": { "sum": { "type": "integer" } },
+        "required": ["sum"]
+      }
+    },
+    "wrongOutput": {
+      "route": "direct:wrongOutput",
+      "description": "Returns a result that does not match its outputSchema",
+      "inputSchema": { "type": "object" },
+      "outputSchema": { "type": "object", "required": ["sum"] }
+    },
+    "fail": {
+      "route": "direct:fail",
+      "description": "Always fails",
+      "inputSchema": { "type": "object" }
+    },
+    "headers": {
+      "route": "direct:headers",
+      "description": "Returns the Mcp headers it received",
+      "inputSchema": { "type": "object" }
+    },
+    "region": {
+      "route": "direct:greet",
+      "description": "Has x-mcp-header parameters",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "x-mcp-header": "Region" },
+          "count": { "type": "integer", "x-mcp-header": "Count" },
+          "dry": { "type": "boolean", "x-mcp-header": "Dry" }
+        }
+      }
+    }
+  },
+  "resources": {
+    "config": {
+      "route": "direct:config",
+      "uri": "config://app",
+      "description": "The configuration",
+      "mimeType": "text/plain"
+    },
+    "customer": {
+      "route": "direct:customer",
+      "uriTemplate": "customer://{id}",
+      "description": "A customer",
+      "mimeType": "application/json"
+    },
+    "logo": {
+      "route": "direct:logo",
+      "uri": "file:///logo.png",
+      "description": "The logo",
+      "mimeType": "image/png"
+    }
+  },
+  "prompts": {
+    "review": {
+      "route": "direct:review",
+      "description": "Reviews code",
+      "arguments": [
+        { "name": "code", "description": "The code", "required": true },
+        { "name": "language" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "info": { "name": "broken", "version": "1.0.0" },
+  "auth": { "issuer": "ftp://issuer", "audience": "x" },
+  "tools": {
+    "badSchema": {
+      "route": "direct:a",
+      "description": "Its input schema is not a schema",
+      "inputSchema": { "type": "object", "properties": { "a": { "type": "nope" } } }
+    },
+    "badHeaders": {
+      "route": "direct:a",
+      "description": "Bad x-mcp-header annotations",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "a": { "type": "string", "x-mcp-header": "Same" },
+          "b": { "type": "string", "x-mcp-header": "same" },
+          "c": { "type": "object", "x-mcp-header": "Obj" },
+          "d": { "type": "string", "x-mcp-header": "bad header" },
+          "e": { "type": "array", "items": { "type": "string", "x-mcp-header": "Item" } },
+          "f": { "type": "string", "const": { "x-mcp-header": "Data" } }
+        }
+      }
+    }
+  },
+  "resources": {
+    "one": { "route": "direct:a", "uri": "same://x", "description": "One", "mimeType": "text/plain" },
+    "two": { "route": "direct:a", "uri": "same://x", "description": "Two", "mimeType": "text/plain" },
+    "noScheme": { "route": "direct:a", "uri": "relative/path", "description": "No scheme", "mimeType": "text/plain" },
+    "fixedTemplate": { "route": "direct:a", "uriTemplate": "x://fixed", "description": "No variable", "mimeType": "text/plain" }
+  },
+  "prompts": {
+    "dup": {
+      "route": "direct:a",
+      "description": "Duplicate arguments",
+      "arguments": [ { "name": "x" }, { "name": "x" } ]
+    }
+  }
+}

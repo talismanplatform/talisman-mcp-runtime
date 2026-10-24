@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://talismanplatform.com/schemas/mcp-server.schema.json",
+  "title": "mcp-server.json",
+  "description": "The MCP definition of an integration: the server's identity, its authentication, and the tools, resources and prompts it serves, each implemented by a direct: route. String values may contain Camel property placeholders ({{key}}), resolved before validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["info"],
+  "properties": {
+    "info": { "$ref": "#/$defs/info" },
+    "auth": { "$ref": "#/$defs/auth" },
+    "tools": {
+      "description": "Tools by name. The name is the MCP tool name.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/toolName" },
+      "additionalProperties": { "$ref": "#/$defs/tool" }
+    },
+    "resources": {
+      "description": "Resources by name. The name is the MCP resource name.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/resource" }
+    },
+    "prompts": {
+      "description": "Prompts by name. The name is the MCP prompt name.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/prompt" }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "toolName": {
+      "description": "MCP tool name: 1-128 characters, letters, digits, underscore, hyphen and dot.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "route": {
+      "description": "The direct: endpoint that implements the capability, e.g. direct:getCustomer. The project must have exactly one consumer for it.",
+      "type": "string",
+      "pattern": "^direct:(//)?[^\\s?]+$"
+    },
+    "scopes": {
+      "description": "OAuth scopes the caller's token must have.",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[\\x21\\x23-\\x5B\\x5D-\\x7E]+$" },
+      "uniqueItems": true
+    },
+    "objectSchema": {
+      "description": "An inline JSON Schema (draft 2020-12 unless $schema says otherwise) of an object.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "object" }
+      }
+    },
+    "jsonSchema": {
+      "description": "An inline JSON Schema (draft 2020-12 unless $schema says otherwise).",
+      "type": "object"
+    },
+    "info": {
+      "description": "The server's identity, returned by server/discover.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "description": "Programmatic name of the server.", "$ref": "#/$defs/text" },
+        "version": { "description": "Version of the server.", "$ref": "#/$defs/text" },
+        "title": { "description": "Display name of the server.", "$ref": "#/$defs/text" },
+        "description": { "description": "What the server does.", "$ref": "#/$defs/text" },
+        "instructions": { "description": "Guidance for the model on how to use the server.", "$ref": "#/$defs/text" }
+      }
+    },
+    "auth": {
+      "description": "Bearer token authentication. Absent: no authentication.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "audience"],
+      "properties": {
+        "issuer": { "description": "The token issuer (iss). Its OpenID configuration is read from <issuer>/.well-known/openid-configuration.", "$ref": "#/$defs/text" },
+        "audience": { "description": "The audience (aud) the token must carry.", "$ref": "#/$defs/text" },
+        "scopes": { "description": "Scopes required for every call.", "$ref": "#/$defs/scopes" }
+      }
+    },
+    "toolAnnotations": {
+      "description": "Hints about the tool's behaviour.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "$ref": "#/$defs/text" },
+        "readOnlyHint": { "type": "boolean" },
+        "destructiveHint": { "type": "boolean" },
+        "idempotentHint": { "type": "boolean" },
+        "openWorldHint": { "type": "boolean" }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "description", "inputSchema"],
+      "properties": {
+        "route": { "$ref": "#/$defs/route" },
+        "title": { "description": "Display name of the tool.", "$ref": "#/$defs/text" },
+        "description": { "description": "What the tool does, for the model.", "$ref": "#/$defs/text" },
+        "inputSchema": { "description": "JSON Schema of the arguments.", "$ref": "#/$defs/objectSchema" },
+        "outputSchema": { "description": "JSON Schema of the structured result (structuredContent).", "$ref": "#/$defs/jsonSchema" },
+        "annotations": { "$ref": "#/$defs/toolAnnotations" },
+        "scopes": { "description": "Scopes required for this tool, on top of auth.scopes.", "$ref": "#/$defs/scopes" }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "description", "mimeType"],
+      "properties": {
+        "route": { "$ref": "#/$defs/route" },
+        "uri": { "description": "The URI of a fixed resource.", "$ref": "#/$defs/text" },
+        "uriTemplate": { "description": "RFC 6570 level 1 template ({var}) of a resource family.", "$ref": "#/$defs/text" },
+        "mimeType": { "description": "MIME type of the content.", "$ref": "#/$defs/text" },
+        "description": { "description": "What the resource contains.", "$ref": "#/$defs/text" },
+        "scopes": { "description": "Scopes required for this resource, on top of auth.scopes.", "$ref": "#/$defs/scopes" }
+      },
+      "oneOf": [
+        { "required": ["uri"], "not": { "required": ["uriTemplate"] } },
+        { "required": ["uriTemplate"], "not": { "required": ["uri"] } }
+      ]
+    },
+    "promptArgument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "description": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "description"],
+      "properties": {
+        "route": { "$ref": "#/$defs/route" },
+        "description": { "description": "What the prompt is for.", "$ref": "#/$defs/text" },
+        "arguments": { "type": "array", "items": { "$ref": "#/$defs/promptArgument" } },
+        "scopes": { "description": "Scopes required for this prompt, on top of auth.scopes.", "$ref": "#/$defs/scopes" }
+      }
+    }
+  }
+}

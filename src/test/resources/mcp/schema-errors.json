@@ -1,0 +1,11 @@
+{
+  "info": { "name": "broken" },
+  "tools": {
+    "bad name": {
+      "route": "seda:x",
+      "description": "Bad",
+      "inputSchema": { "type": "array" }
+    }
+  },
+  "extra": true
+}
