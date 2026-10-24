@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2026 Talisman Platform
+    Copyright 2026 Talisman Cloud Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -28,12 +28,11 @@
     <name>Talisman MCP Runtime</name>
     <description>Serves the Model Context Protocol from an Apache Camel integration: tools, resources and prompts
         declared in mcp-server.json, implemented by direct: routes.</description>
-    <!-- TODO before the first Central release: the public repository's URL -->
-    <url>https://github.com/ORG/talisman-mcp-runtime</url>
+    <url>https://github.com/talismanplatform/talisman-mcp-runtime</url>
     <inceptionYear>2026</inceptionYear>
 
     <organization>
-        <name>Talisman Platform</name>
+        <name>Talisman Cloud Inc.</name>
         <url>https://talismanplatform.com</url>
     </organization>
 
@@ -48,18 +47,19 @@
     <developers>
         <developer>
             <name>Talisman Platform</name>
-            <organization>Talisman Platform</organization>
+            <organization>Talisman Cloud Inc.</organization>
             <organizationUrl>https://talismanplatform.com</organizationUrl>
         </developer>
     </developers>
 
     <scm>
-        <url>https://github.com/ORG/talisman-mcp-runtime</url>
-        <connection>scm:git:https://github.com/ORG/talisman-mcp-runtime.git</connection>
+        <url>https://github.com/talismanplatform/talisman-mcp-runtime</url>
+        <connection>scm:git:https://github.com/talismanplatform/talisman-mcp-runtime.git</connection>
+        <developerConnection>scm:git:git@github.com:talismanplatform/talisman-mcp-runtime.git</developerConnection>
     </scm>
 
     <properties>
-        <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
@@ -68,9 +68,6 @@
         <json-schema-validator.version>2.0.1</json-schema-validator.version>
         <junit.version>5.14.4</junit.version>
         <log4j2.version>2.25.4</log4j2.version>
-
-        <!-- reposilite before the library is on Maven Central (mvn -Preposilite deploy) -->
-        <reposilite.url>http://reposilite:8080/releases</reposilite.url>
     </properties>
 
     <dependencyManagement>
@@ -210,7 +207,7 @@
             </plugins>
         </pluginManagement>
         <plugins>
-            <!-- every source file carries the Apache header naming Talisman Platform -->
+            <!-- every source file carries the Apache header naming Talisman Cloud Inc. -->
             <plugin>
                 <groupId>com.mycila</groupId>
                 <artifactId>license-maven-plugin</artifactId>
@@ -243,7 +240,7 @@
                         <manifestEntries>
                             <Implementation-Title>${project.artifactId}</Implementation-Title>
                             <Implementation-Version>${project.version}</Implementation-Version>
-                            <Implementation-Vendor>Talisman Platform</Implementation-Vendor>
+                            <Implementation-Vendor>Talisman Cloud Inc.</Implementation-Vendor>
                         </manifestEntries>
                     </archive>
                 </configuration>
@@ -252,7 +249,7 @@
     </build>
 
     <profiles>
-        <!-- Maven Central (docs: MAVEN.CENTRAL.RELEASE.md): sources, javadoc, signatures, Central Portal -->
+        <!-- Maven Central: sources, javadoc, signatures, Central Portal -->
         <profile>
             <id>release</id>
             <build>
@@ -310,16 +307,6 @@
                     </plugin>
                 </plugins>
             </build>
-        </profile>
-        <!-- reposilite (releases proxies Central and allows redeployment): mvn -s .mvn/reposilite-settings.xml -Preposilite deploy -->
-        <profile>
-            <id>reposilite</id>
-            <distributionManagement>
-                <repository>
-                    <id>reposilite</id>
-                    <url>${reposilite.url}</url>
-                </repository>
-            </distributionManagement>
         </profile>
     </profiles>
 </project>

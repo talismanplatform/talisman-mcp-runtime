@@ -13,7 +13,7 @@ MCP **2026-07-28** (stateless Streamable HTTP) on `/mcp` of Camel's platform-htt
 ```
 
 The dependency alone activates the runtime: it registers a Camel `ContextServicePlugin`
-(`META-INF/services/org.apache.camel.spi.ContextServicePlugin`). It needs Camel 4.22.x and Java 17. The HTTP server
+(`META-INF/services/org.apache.camel.spi.ContextServicePlugin`). It needs Camel 4.22.x and Java 25. The HTTP server
 must be enabled (`camel.server.enabled=true`; `camel.server.port`, 8080 by default).
 
 ## `mcp-server.json`
@@ -148,17 +148,9 @@ The conformance run uses `@modelcontextprotocol/conformance` at protocol 2026-07
 (`src/test/resources/mcp/conformance.json`). It runs every scenario for what the runtime serves.
 `conformance-baseline.yml` lists the checks the suite cannot run against it.
 
-Deploy to a Reposilite (`reposilite.url`, default `http://reposilite:8080/releases`):
-
-```bash
-REPOSILITE_USER=… REPOSILITE_TOKEN=… mvn -s .mvn/reposilite-settings.xml -Preposilite deploy
-```
-
-`-s` replaces the user settings. Add `-Dmaven.repo.local=…` when those set the local repository.
-
 Releases to Maven Central use the `release` profile (sources, javadoc, GPG signature, Central Portal publishing):
 `mvn -Prelease deploy`.
 
 ## License
 
-Apache License 2.0, see `LICENSE` and `NOTICE`. Copyright 2026 Talisman Platform.
+Apache License 2.0, see `LICENSE` and `NOTICE`. Copyright 2026 Talisman Cloud Inc.
