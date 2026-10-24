@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
+import org.apache.camel.Exchange;
+import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.builder.RouteBuilder;
 
 /** The direct: routes behind the test definitions. */
@@ -46,6 +48,9 @@ class TestRoutes extends RouteBuilder {
             seen.put("aud", claims == null ? null : claims.get("aud"));
             seen.put("authorization", e.getMessage().getHeader("Authorization"));
             seen.put("arguments", e.getMessage().getBody());
+            seen.put("correlationId", e.getProperty(ExchangePropertyKey.CORRELATION_ID));
+            seen.put("exchangeId", e.getExchangeId());
+            seen.put("breadcrumbId", e.getMessage().getHeader(Exchange.BREADCRUMB_ID));
             e.getMessage().setBody(seen);
         });
         from("direct:config").setBody(constant("key=value"));

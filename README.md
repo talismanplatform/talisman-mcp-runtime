@@ -76,7 +76,8 @@ Each call sends a new exchange to the capability's route.
 | Prompt | arguments `Map` (all values strings) | `McpMethod` = `prompts/get`, `McpName` |
 
 With `auth`, `McpSubject` (token `sub`), `McpScopes` (`List<String>`) and `McpClaims` (`Map`) are set too. HTTP
-request headers never reach the route. Constants: `com.talismanplatform.mcp.runtime.McpHeaders`.
+request headers never reach the route, except `breadcrumbId` when the request has one. The exchange property
+`CamelCorrelationId` is the HTTP exchange's id. Constants: `com.talismanplatform.mcp.runtime.McpHeaders`.
 
 The body out becomes the result:
 

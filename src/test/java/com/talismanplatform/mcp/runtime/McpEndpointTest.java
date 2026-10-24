@@ -30,6 +30,7 @@ import com.talismanplatform.mcp.runtime.McpTestServer.Reply;
 import static com.talismanplatform.mcp.runtime.McpTestServer.params;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -133,6 +134,15 @@ class McpEndpointTest {
         assertEquals(1, seen.path("arguments").path("x").asInt());
         assertTrue(seen.path("authorization").isNull());
         assertTrue(seen.path("subject").isNull());
+    }
+
+    @Test
+    void routeExchangeIsCorrelatedWithTheHttpExchange() throws Exception {
+        JsonNode seen = server.call("tools/call", params("name", "headers"), "breadcrumbId", "trace-1")
+                .result().path("structuredContent");
+        assertTrue(seen.path("correlationId").isTextual());
+        assertNotEquals(seen.path("exchangeId").asText(), seen.path("correlationId").asText());
+        assertEquals("trace-1", seen.path("breadcrumbId").asText());
     }
 
     @Test

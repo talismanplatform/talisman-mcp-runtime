@@ -33,6 +33,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.networknt.schema.Error;
 import org.apache.camel.Exchange;
+import org.apache.camel.ExchangePropertyKey;
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.support.DefaultExchange;
@@ -96,7 +97,7 @@ final class McpEndpoint implements Processor {
         Map<String, Object> headers = requestHeaders(message);
         String method = message.getHeader(Exchange.HTTP_METHOD, String.class);
         String body = "POST".equals(method) ? message.getBody(String.class) : null;
-        Response response = handle(method, headers, body);
+        Response response = handle(method, headers, body, exchange.getExchangeId());
         write(message, response);
     }
 
@@ -130,7 +131,8 @@ final class McpEndpoint implements Processor {
         }
     }
 
-    Response handle(String httpMethod, Map<String, Object> headers, String body) {
+    /** {@code correlationId}: the HTTP exchange's id, set on every exchange sent to a capability's route. */
+    Response handle(String httpMethod, Map<String, Object> headers, String body, String correlationId) {
         if (!"POST".equals(httpMethod)) {
             return new Response(405, Map.of("Allow", "POST"), null);
         }
@@ -172,7 +174,7 @@ final class McpEndpoint implements Processor {
                         + PROTOCOL_VERSION + ", stateless)", 404, data);
             }
             checkProtocolHeaders(method, params, headers);
-            ObjectNode result = dispatch(state, caller, method, params, headers);
+            ObjectNode result = dispatch(state, caller, method, params, headers, correlationId);
             result.put("resultType", "complete");
             ObjectNode serverInfo = result.putObject("_meta").putObject(META_SERVER_INFO);
             serverInfo.put("name", state.definition().info().name());
@@ -384,7 +386,7 @@ final class McpEndpoint implements Processor {
     // --- methods ------------------------------------------------------------------------------------------------
 
     private ObjectNode dispatch(McpServer.State state, Caller caller, String method, JsonNode params,
-            Map<String, Object> headers) {
+            Map<String, Object> headers, String correlationId) {
         McpServerDefinition definition = state.definition();
         return switch (method) {
             case "server/discover" -> discover(definition);
@@ -394,9 +396,9 @@ final class McpEndpoint implements Processor {
             case "resources/templates/list" -> list("resourceTemplates",
                     filter(definition.resources(), r -> r.uriTemplate() != null), caller, McpEndpoint::templateEntry);
             case "prompts/list" -> list("prompts", definition.prompts(), caller, McpEndpoint::promptEntry);
-            case "tools/call" -> callTool(state, caller, params, headers);
-            case "resources/read" -> readResource(state, caller, params, headers);
-            case "prompts/get" -> getPrompt(state, caller, params, headers);
+            case "tools/call" -> callTool(state, caller, params, headers, correlationId);
+            case "resources/read" -> readResource(state, caller, params, headers, correlationId);
+            case "prompts/get" -> getPrompt(state, caller, params, headers, correlationId);
             default -> throw new McpError(McpError.METHOD_NOT_FOUND, "Method not found: " + method, 404, null);
         };
     }
@@ -501,7 +503,8 @@ final class McpEndpoint implements Processor {
         return entry;
     }
 
-    private ObjectNode callTool(McpServer.State state, Caller caller, JsonNode params, Map<String, Object> headers) {
+    private ObjectNode callTool(McpServer.State state, Caller caller, JsonNode params, Map<String, Object> headers,
+            String correlationId) {
         String name = params.path("name").asText();
         Tool tool = state.definition().tools().get(name);
         if (tool == null) {
@@ -520,7 +523,7 @@ final class McpEndpoint implements Processor {
         if (!errors.isEmpty()) {
             return McpResults.toolError("Invalid arguments: " + McpResults.describe(errors));
         }
-        Exchange result = call(tool, "tools/call", toMap(arguments), caller, null);
+        Exchange result = call(tool, "tools/call", toMap(arguments), caller, null, headers, correlationId);
         if (result.getException() != null) {
             LOG.warn("Tool {} failed", tool.name(), result.getException());
             return McpResults.toolError(messageOf(result.getException()));
@@ -529,7 +532,7 @@ final class McpEndpoint implements Processor {
     }
 
     private ObjectNode readResource(McpServer.State state, Caller caller, JsonNode params,
-            Map<String, Object> headers) {
+            Map<String, Object> headers, String correlationId) {
         String uri = params.path("uri").asText(null);
         if (uri == null) {
             throw McpError.invalidParams("params.uri is required");
@@ -557,7 +560,8 @@ final class McpEndpoint implements Processor {
             throw new McpError(McpError.INVALID_PARAMS, "Resource not found", 200, data);
         }
         requireScopes(state, caller, resource, headers);
-        Exchange result = call(resource, "resources/read", new LinkedHashMap<>(variables), caller, uri);
+        Exchange result = call(resource, "resources/read", new LinkedHashMap<>(variables), caller, uri, headers,
+                correlationId);
         if (result.getException() != null) {
             LOG.warn("Resource {} failed", resource.name(), result.getException());
             throw new McpError(McpError.INTERNAL_ERROR, messageOf(result.getException()), 200, null);
@@ -567,7 +571,8 @@ final class McpEndpoint implements Processor {
         return readResult;
     }
 
-    private ObjectNode getPrompt(McpServer.State state, Caller caller, JsonNode params, Map<String, Object> headers) {
+    private ObjectNode getPrompt(McpServer.State state, Caller caller, JsonNode params, Map<String, Object> headers,
+            String correlationId) {
         String name = params.path("name").asText();
         Prompt prompt = state.definition().prompts().get(name);
         if (prompt == null) {
@@ -593,7 +598,7 @@ final class McpEndpoint implements Processor {
                 throw McpError.invalidParams("Missing required argument: " + argument.name());
             }
         }
-        Exchange result = call(prompt, "prompts/get", values, caller, null);
+        Exchange result = call(prompt, "prompts/get", values, caller, null, headers, correlationId);
         if (result.getException() != null) {
             LOG.warn("Prompt {} failed", prompt.name(), result.getException());
             throw new McpError(McpError.INTERNAL_ERROR, messageOf(result.getException()), 200, null);
@@ -605,11 +610,20 @@ final class McpEndpoint implements Processor {
         }
     }
 
-    /** Sends a new exchange to the capability's route (exchange contract: body and {@code Mcp*} headers). */
+    /**
+     * Sends a new exchange to the capability's route (exchange contract: body and {@code Mcp*} headers). It is
+     * correlated with the HTTP exchange: {@code CamelCorrelationId} is that exchange's id, and the
+     * {@code breadcrumbId}, when the request has one, is carried over.
+     */
     private Exchange call(Capability capability, String method, Map<String, Object> body, Caller caller,
-            String uri) {
+            String uri, Map<String, Object> headers, String correlationId) {
         Exchange exchange = new DefaultExchange(server.context());
+        exchange.setProperty(ExchangePropertyKey.CORRELATION_ID, correlationId);
         Message in = exchange.getIn();
+        Object breadcrumbId = headers.get(Exchange.BREADCRUMB_ID);
+        if (breadcrumbId != null) {
+            in.setHeader(Exchange.BREADCRUMB_ID, breadcrumbId);
+        }
         in.setBody(body);
         in.setHeader(McpHeaders.METHOD, method);
         in.setHeader(McpHeaders.NAME, capability.name());
