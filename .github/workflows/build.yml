@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # license header check (validate phase) and unit/integration tests
+      - run: mvn -B verify
+
+  conformance:
+    name: MCP conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # the suite is fetched with npx (@modelcontextprotocol/conformance, pinned in McpConformanceTest)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: mvn -B verify -Dmcp.conformance=true
+      - name: Upload conformance output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-output
+          path: target/conformance/
+          if-no-files-found: ignore
