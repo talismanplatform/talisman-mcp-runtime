@@ -56,8 +56,9 @@ import com.talismanplatform.mcp.runtime.McpServerDefinition.ResourceTemplate;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Tool;
 
 /**
- * Reads {@code mcp-server.json} from the classpath: resolves property placeholders, validates it against the bundled
- * {@code mcp-server.schema.json} and the rules the schema cannot express, and checks that every route has a consumer.
+ * Reads {@code mcp-server.json} from the classpath, as written (no property placeholders): validates it against the
+ * bundled {@code mcp-server.schema.json} and the rules the schema cannot express, and checks that every route has a
+ * consumer.
  */
 final class McpServerLoader {
 

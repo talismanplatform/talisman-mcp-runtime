@@ -22,7 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.networknt.schema.Schema;
 
 /**
- * {@code mcp-server.json} after placeholder resolution and validation. Maps keep the file's order.
+ * {@code mcp-server.json} after validation. Maps keep the file's order.
  */
 record McpServerDefinition(Info info, Auth auth, Map<String, Tool> tools, Map<String, Resource> resources,
         Map<String, ResourceTemplate> resourceTemplates, Map<String, Prompt> prompts) {
