@@ -18,12 +18,21 @@ package com.talismanplatform.mcp.runtime;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.StartupListener;
+import org.apache.camel.spi.CamelEvent;
+import org.apache.camel.spi.CamelEvent.RouteReloadedEvent;
+import org.apache.camel.support.EventNotifierSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * The MCP definition of the running integration. Loaded when the context starts (an invalid definition stops the
  * integration) and re-read on dev mode's reload (an invalid definition is logged and the previous one is kept).
+ * <p>
+ * A reload re-reads the file once Camel has re-added every route (the last {@link RouteReloadedEvent} of the batch):
+ * {@code ContextServicePlugin.onReload} comes before the routes are removed and re-added, and the
+ * {@link StartupListener} is called again for each route started meanwhile, so neither sees the new set of routes.
+ * A reload that removes all routes (Camel Main's default) also removes the runtime's own routes, which come from no
+ * file; they are added again first.
  */
 final class McpServer implements StartupListener {
 
@@ -45,8 +54,41 @@ final class McpServer implements StartupListener {
 
     @Override
     public void onCamelContextStarted(CamelContext context, boolean alreadyStarted) {
+        if (alreadyStarted) {
+            return; // a route started on the running context, e.g. during a reload: see reloadNotifier
+        }
         state = load();
         log(state.definition());
+    }
+
+    /** Reloads the definition after the last route of a reload batch. */
+    EventNotifierSupport reloadNotifier() {
+        return new EventNotifierSupport() {
+            @Override
+            public boolean isEnabled(CamelEvent event) {
+                return event instanceof RouteReloadedEvent;
+            }
+
+            @Override
+            public void notify(CamelEvent event) {
+                RouteReloadedEvent reloaded = (RouteReloadedEvent) event;
+                if (reloaded.getIndex() == reloaded.getTotal()) {
+                    restoreRoutes();
+                    reload();
+                }
+            }
+        };
+    }
+
+    private void restoreRoutes() {
+        if (context.getRoute(McpRoutes.MCP_ROUTE_ID) != null) {
+            return;
+        }
+        try {
+            context.addRoutes(new McpRoutes(this));
+        } catch (Exception e) {
+            LOG.error("Adding the MCP routes again after the reload failed: /mcp is not served", e);
+        }
     }
 
     /** Re-reads the definition; keeps serving the previous one when the new one is invalid. */

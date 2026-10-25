@@ -33,15 +33,9 @@ public class McpContextServicePlugin implements ContextServicePlugin {
         try {
             context.addRoutes(new McpRoutes(server));
             context.addStartupListener(server);
+            context.getManagementStrategy().addEventNotifier(server.reloadNotifier());
         } catch (Exception e) {
             throw RuntimeCamelException.wrapRuntimeCamelException(e);
-        }
-    }
-
-    @Override
-    public void onReload(CamelContext context) {
-        if (server != null) {
-            server.reload();
         }
     }
 

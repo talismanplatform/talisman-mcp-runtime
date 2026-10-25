@@ -23,6 +23,8 @@ import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -81,6 +83,54 @@ final class McpTestServer implements AutoCloseable {
         main.configure().addRoutesBuilder(new TestRoutes());
         main.start();
         return new McpTestServer(main, port);
+    }
+
+    /**
+     * A dev-mode-like integration: the routes are the {@code *.yaml} files of {@code dir} and
+     * {@value McpServer#DEFAULT_FILE} is read from {@code dir}, so a test can change both and reload.
+     */
+    static McpTestServer startFrom(Path dir) throws Exception {
+        int port = freePort();
+        Main main = new Main();
+        main.addInitialProperty("camel.server.enabled", "true");
+        main.addInitialProperty("camel.server.port", String.valueOf(port));
+        main.addInitialProperty("camel.main.routesIncludePattern", "file:" + dir + "/*.yaml");
+        main.addMainListener(new MainListenerSupport() {
+            @Override
+            public void beforeConfigure(BaseMainSupport main) {
+                CamelContext context = main.getCamelContext();
+                context.setClassResolver(new DirectoryClassResolver(context, dir));
+            }
+        });
+        main.start();
+        return new McpTestServer(main, port);
+    }
+
+    CamelContext context() {
+        return main.getCamelContext();
+    }
+
+    /** Reads {@value McpServer#DEFAULT_FILE} from a directory instead of the classpath. */
+    private static final class DirectoryClassResolver extends DefaultClassResolver {
+
+        private final Path dir;
+
+        DirectoryClassResolver(CamelContext context, Path dir) {
+            super(context);
+            this.dir = dir;
+        }
+
+        @Override
+        public InputStream loadResourceAsStream(String uri) {
+            if (!McpServer.DEFAULT_FILE.equals(uri)) {
+                return super.loadResourceAsStream(uri);
+            }
+            try {
+                return Files.newInputStream(dir.resolve(uri));
+            } catch (IOException e) {
+                return null;
+            }
+        }
     }
 
     /** Serves {@code file} as the integration's {@value McpServer#DEFAULT_FILE}. */

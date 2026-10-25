@@ -67,8 +67,9 @@ mcp-server.json is invalid:
   $.tools.get_customer.route: no route consumes direct:getCustomer
 ```
 
-On a dev-mode reload (`ContextServicePlugin.onReload`) the file is read again. An invalid file is logged, and the
-previous definition keeps serving.
+On a dev-mode reload the file is read again once Camel has re-added the routes (the last `RouteReloadedEvent`); the
+runtime's own routes are added again when the reload removed them. An invalid file is logged, and the previous
+definition keeps serving.
 
 ## Exchange contract
 
