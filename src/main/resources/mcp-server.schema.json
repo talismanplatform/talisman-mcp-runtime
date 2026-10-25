@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://talismanplatform.com/schemas/mcp-server.schema.json",
   "title": "mcp-server.json",
-  "description": "The MCP definition of an integration: the server's identity, its authentication, and the tools, resources and prompts it serves, each implemented by a direct: route. String values may contain Camel property placeholders ({{key}}), resolved before validation.",
+  "description": "The MCP definition of an integration: the server's identity, its authentication, and the tools, resources, resource templates and prompts it serves, each implemented by a direct: route.",
   "type": "object",
   "additionalProperties": false,
   "required": ["info"],
@@ -20,6 +20,12 @@
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/name" },
       "additionalProperties": { "$ref": "#/$defs/resource" }
+    },
+    "resourceTemplates": {
+      "description": "Resource templates by name. The name is the MCP resource template name.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/resourceTemplate" }
     },
     "prompts": {
       "description": "Prompts by name. The name is the MCP prompt name.",
@@ -49,7 +55,7 @@
       "pattern": "^direct:(//)?[^\\s?]+$"
     },
     "scopes": {
-      "description": "OAuth scopes the caller's token must have.",
+      "description": "OAuth scopes.",
       "type": "array",
       "items": { "type": "string", "pattern": "^[\\x21\\x23-\\x5B\\x5D-\\x7E]+$" },
       "uniqueItems": true
@@ -83,11 +89,14 @@
       "description": "Bearer token authentication. Absent: no authentication.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["issuer", "audience"],
+      "required": ["oauthProfile"],
       "properties": {
-        "issuer": { "description": "The token issuer (iss). Its OpenID configuration is read from <issuer>/.well-known/openid-configuration.", "$ref": "#/$defs/text" },
-        "audience": { "description": "The audience (aud) the token must carry.", "$ref": "#/$defs/text" },
-        "scopes": { "description": "Scopes required for every call.", "$ref": "#/$defs/scopes" }
+        "oauthProfile": {
+          "description": "The camel-oauth profile that validates the token: its camel.oauth.<profile>.* keys in application.properties (base-uri or expected-issuer, expected-audience, ...).",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        },
+        "scopes": { "description": "Scopes the token must have for every call.", "$ref": "#/$defs/scopes" }
       }
     },
     "toolAnnotations": {
@@ -112,26 +121,39 @@
         "description": { "description": "What the tool does, for the model.", "$ref": "#/$defs/text" },
         "inputSchema": { "description": "JSON Schema of the arguments.", "$ref": "#/$defs/objectSchema" },
         "outputSchema": { "description": "JSON Schema of the structured result (structuredContent).", "$ref": "#/$defs/jsonSchema" },
-        "annotations": { "$ref": "#/$defs/toolAnnotations" },
-        "scopes": { "description": "Scopes required for this tool, on top of auth.scopes.", "$ref": "#/$defs/scopes" }
+        "annotations": { "$ref": "#/$defs/toolAnnotations" }
+      }
+    },
+    "resourceFields": {
+      "description": "The fields of resources and resource templates.",
+      "type": "object",
+      "required": ["route", "description"],
+      "properties": {
+        "route": { "$ref": "#/$defs/route" },
+        "title": { "description": "Display name.", "$ref": "#/$defs/text" },
+        "description": { "description": "What the content is.", "$ref": "#/$defs/text" },
+        "mimeType": { "description": "MIME type of the content.", "$ref": "#/$defs/text" }
       }
     },
     "resource": {
+      "description": "A fixed resource, listed by resources/list.",
       "type": "object",
-      "additionalProperties": false,
-      "required": ["route", "description", "mimeType"],
+      "allOf": [{ "$ref": "#/$defs/resourceFields" }],
+      "required": ["uri"],
       "properties": {
-        "route": { "$ref": "#/$defs/route" },
-        "uri": { "description": "The URI of a fixed resource.", "$ref": "#/$defs/text" },
-        "uriTemplate": { "description": "RFC 6570 level 1 template ({var}) of a resource family.", "$ref": "#/$defs/text" },
-        "mimeType": { "description": "MIME type of the content.", "$ref": "#/$defs/text" },
-        "description": { "description": "What the resource contains.", "$ref": "#/$defs/text" },
-        "scopes": { "description": "Scopes required for this resource, on top of auth.scopes.", "$ref": "#/$defs/scopes" }
+        "uri": { "description": "The URI of the resource.", "$ref": "#/$defs/text" }
       },
-      "oneOf": [
-        { "required": ["uri"], "not": { "required": ["uriTemplate"] } },
-        { "required": ["uriTemplate"], "not": { "required": ["uri"] } }
-      ]
+      "unevaluatedProperties": false
+    },
+    "resourceTemplate": {
+      "description": "A family of resources, listed by resources/templates/list.",
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/resourceFields" }],
+      "required": ["uriTemplate"],
+      "properties": {
+        "uriTemplate": { "description": "RFC 6570 level 1 template ({var}).", "$ref": "#/$defs/text" }
+      },
+      "unevaluatedProperties": false
     },
     "promptArgument": {
       "type": "object",
@@ -150,8 +172,7 @@
       "properties": {
         "route": { "$ref": "#/$defs/route" },
         "description": { "description": "What the prompt is for.", "$ref": "#/$defs/text" },
-        "arguments": { "type": "array", "items": { "$ref": "#/$defs/promptArgument" } },
-        "scopes": { "description": "Scopes required for this prompt, on top of auth.scopes.", "$ref": "#/$defs/scopes" }
+        "arguments": { "type": "array", "items": { "$ref": "#/$defs/promptArgument" } }
       }
     }
   }

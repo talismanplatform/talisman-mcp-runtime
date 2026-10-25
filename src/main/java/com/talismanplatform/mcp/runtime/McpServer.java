@@ -15,8 +15,6 @@
  */
 package com.talismanplatform.mcp.runtime;
 
-import java.util.List;
-
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.StartupListener;
@@ -68,15 +66,17 @@ final class McpServer implements StartupListener {
         McpServerDefinition definition = McpServerLoader.load(context, DEFAULT_FILE);
         McpServerLoader.checkRoutes(definition, context.getRoutes(), DEFAULT_FILE);
         McpAuthenticator authenticator = definition.auth() == null ? null
-                : new McpAuthenticator(context, definition.auth());
+                : new McpAuthenticator(context, definition.auth(), DEFAULT_FILE);
+        McpServerLoader.warnings(definition).forEach(warning -> LOG.warn("{}: {}", DEFAULT_FILE, warning));
         return new State(definition, authenticator);
     }
 
     private static void log(McpServerDefinition definition) {
-        LOG.info("MCP server {} {} on /mcp: {} tools, {} resources, {} prompts, {}", definition.info().name(),
-                definition.info().version(), definition.tools().size(), definition.resources().size(),
-                definition.prompts().size(),
-                definition.auth() == null ? "no authentication" : "tokens from " + definition.auth().issuer());
+        LOG.info("MCP server {} {} on /mcp: {} tools, {} resources, {} resource templates, {} prompts, {}",
+                definition.info().name(), definition.info().version(), definition.tools().size(),
+                definition.resources().size(), definition.resourceTemplates().size(), definition.prompts().size(),
+                definition.auth() == null ? "no authentication"
+                        : "tokens checked by OAuth profile " + definition.auth().oauthProfile());
     }
 
     /**
@@ -112,15 +112,5 @@ final class McpServer implements StartupListener {
                 LOG.debug("Stopping the producer template failed", e);
             }
         }
-    }
-
-    static List<String> union(List<String> a, List<String> b) {
-        if (b.isEmpty()) {
-            return a;
-        }
-        if (a.isEmpty()) {
-            return b;
-        }
-        return java.util.stream.Stream.concat(a.stream(), b.stream()).distinct().toList();
     }
 }

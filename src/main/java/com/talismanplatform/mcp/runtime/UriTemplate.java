@@ -82,7 +82,7 @@ final class UriTemplate {
             i = close + 1;
         }
         if (variables.isEmpty()) {
-            throw new IllegalArgumentException("has no {variable}; use uri for a fixed resource");
+            throw new IllegalArgumentException("has no {variable}; a fixed URI is a resource, not a template");
         }
         return new UriTemplate(template, List.copyOf(variables), Pattern.compile(regex.toString()));
     }

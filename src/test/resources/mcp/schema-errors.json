@@ -4,8 +4,16 @@
     "bad name": {
       "route": "seda:x",
       "description": "Bad",
-      "inputSchema": { "type": "array" }
+      "inputSchema": { "type": "array" },
+      "scopes": ["admin"]
     }
   },
+  "resources": {
+    "family": { "route": "direct:a", "uriTemplate": "x://{id}", "description": "A template in resources" }
+  },
+  "resourceTemplates": {
+    "fixed": { "route": "direct:a", "uri": "x://fixed", "description": "A resource in resourceTemplates" }
+  },
+  "auth": { "issuer": "https://issuer", "audience": "x" },
   "extra": true
 }

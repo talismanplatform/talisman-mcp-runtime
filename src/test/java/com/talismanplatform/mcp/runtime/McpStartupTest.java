@@ -27,13 +27,33 @@ class McpStartupTest {
 
     @Test
     void missingRouteConsumerStopsStartup() {
-        Exception e = assertThrows(Exception.class, () -> McpTestServer.start("mcp/missing-route.json", Map.of()).close());
+        String message = startupFailure("mcp/missing-route.json", Map.of());
+        assertTrue(message.contains("$.tools.nowhere.route: no route consumes direct:nowhere"), message);
+    }
+
+    @Test
+    void aProfileWithoutIssuerStopsStartup() {
+        String message = startupFailure("mcp/auth.json", Map.of("camel.oauth.mcp.expected-audience", "mcp-test"));
+        assertTrue(message.contains("$.auth.oauthProfile: camel.oauth.mcp.*: set base-uri or expected-issuer"),
+                message);
+    }
+
+    @Test
+    void aProfileWithoutAudienceStopsStartup() {
+        String message = startupFailure("mcp/auth.json", Map.of(
+                "camel.oauth.mcp.expected-issuer", "https://issuer.example",
+                "camel.oauth.mcp.jwks-endpoint", "https://issuer.example/certs"));
+        assertTrue(message.contains("$.auth.oauthProfile: camel.oauth.mcp.*: Token validation requires expected-audience"),
+                message);
+    }
+
+    private static String startupFailure(String file, Map<String, String> properties) {
+        Exception e = assertThrows(Exception.class, () -> McpTestServer.start(file, properties).close());
         Throwable cause = e;
         while (cause != null && !(cause instanceof McpDefinitionException)) {
             cause = cause.getCause();
         }
         assertTrue(cause != null, () -> "not caused by McpDefinitionException: " + e);
-        assertTrue(cause.getMessage().contains("$.tools.nowhere.route: no route consumes direct:nowhere"),
-                cause.getMessage());
+        return cause.getMessage();
     }
 }

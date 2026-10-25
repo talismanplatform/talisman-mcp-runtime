@@ -1,0 +1,9 @@
+{
+  "info": { "name": "warnings", "version": "1.0.0" },
+  "resources": {
+    "customer": { "route": "direct:a", "uri": "customer://all", "description": "All customers" }
+  },
+  "resourceTemplates": {
+    "customer": { "route": "direct:a", "uriTemplate": "customer://{id}", "description": "A customer" }
+  }
+}

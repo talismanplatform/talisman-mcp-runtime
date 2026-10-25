@@ -1,7 +1,7 @@
 # Talisman MCP Runtime
 
 Makes a Camel Main integration an [MCP](https://modelcontextprotocol.io) server. Add the dependency, describe the
-server in `mcp-server.json`, and implement each tool, resource and prompt as a `direct:` route. The runtime serves
+server in `mcp-server.json`, and implement each tool, resource, resource template and prompt as a `direct:` route. The runtime serves
 MCP **2026-07-28** (stateless Streamable HTTP) on `/mcp` of Camel's platform-http server.
 
 ```xml
@@ -24,17 +24,19 @@ Read from the classpath when the context starts. The JSON Schema is `mcp-server.
 ```json
 {
   "info": { "name": "crm", "version": "1.0.0", "title": "CRM", "instructions": "Look customers up by id." },
-  "auth": { "issuer": "{{mcp.auth.issuer}}", "audience": "{{mcp.auth.audience}}", "scopes": ["crm"] },
+  "auth": { "oauthProfile": "mcp", "scopes": ["crm"] },
   "tools": {
     "get_customer": {
       "route": "direct:getCustomer",
       "description": "Returns a customer",
       "inputSchema": { "type": "object", "properties": { "id": { "type": "string" } }, "required": ["id"] },
-      "annotations": { "readOnlyHint": true },
-      "scopes": ["crm.read"]
+      "annotations": { "readOnlyHint": true }
     }
   },
   "resources": {
+    "segments": { "route": "direct:listSegments", "uri": "crm://segments", "description": "Customer segments" }
+  },
+  "resourceTemplates": {
     "customer": { "route": "direct:readCustomer", "uriTemplate": "crm://customers/{id}",
                   "mimeType": "application/json", "description": "A customer" }
   },
@@ -45,17 +47,20 @@ Read from the classpath when the context starts. The JSON Schema is `mcp-server.
 }
 ```
 
-- String values may hold Camel property placeholders (`{{key}}`, `{{key:default}}`), resolved before validation.
+- Values are taken as written: no property placeholders. What differs per environment lives in the OAuth profile's
+  keys in `application.properties` (see Authentication).
 - Tools: `inputSchema` is an object schema, `outputSchema` any schema (draft 2020-12 unless `$schema` says
   otherwise); both are checked against their meta-schema. A string, integer or boolean property reached from the root
   through `properties` may carry `x-mcp-header`, which the client mirrors in an `Mcp-Param-<name>` header.
-- Resources: either `uri` (a fixed resource) or `uriTemplate` (RFC 6570 level 1, `{var}` matches one path segment).
+- `resources` have a `uri` (listed by `resources/list`), `resourceTemplates` a `uriTemplate` (RFC 6570 level 1,
+  `{var}` matches one path segment; listed by `resources/templates/list`). Both take `route`, `description`, and
+  optionally `title` and `mimeType`. A name used in both sections is logged as a warning.
 - `auth` absent: no authentication.
 
 ### Startup checks
 
-The integration does not start when the file is missing or invalid, or when a `route` has no `direct:` consumer
-in the context. Every problem is reported with its JSON path:
+The integration does not start when the file is missing or invalid, when a `route` has no `direct:` consumer
+in the context, or when the `auth` profile is incomplete or its identity provider cannot be read. Every problem is reported with its JSON path:
 
 ```
 mcp-server.json is invalid:
@@ -72,7 +77,8 @@ Each call sends a new exchange to the capability's route.
 | | Body in | Headers in |
 |---|---|---|
 | Tool | arguments `Map`, validated against `inputSchema` | `McpMethod` = `tools/call`, `McpName` |
-| Resource | `Map` of the `uriTemplate` variables (empty for `uri`) | `McpMethod` = `resources/read`, `McpName`, `McpUri` |
+| Resource | empty `Map` | `McpMethod` = `resources/read`, `McpName`, `McpUri` |
+| Resource template | `Map` of the `uriTemplate` variables | `McpMethod` = `resources/read`, `McpName`, `McpUri` |
 | Prompt | arguments `Map` (all values strings) | `McpMethod` = `prompts/get`, `McpName` |
 
 With `auth`, `McpSubject` (token `sub`), `McpScopes` (`List<String>`) and `McpClaims` (`Map`) are set too. HTTP
@@ -88,9 +94,11 @@ The body out becomes the result:
   - A result that does not match the `outputSchema`, or an exception, gives `isError: true` with the message (the
     stack trace goes to the log).
   - Arguments that fail `inputSchema` give `isError: true` too, so the model can correct the call.
-- **Resource.**
-  - A text `mimeType` (`text/*`, JSON, XML, YAML, …) gives `text`; `Map`/POJO bodies are written as JSON.
+- **Resource** (and resource template).
+  - The type is the `mimeType`, or, without one, the route's `Content-Type`; without either the content has none.
+  - A String body, or a text type (`text/*`, JSON, XML, YAML, …), gives `text`; `Map`/POJO bodies are written as JSON.
   - Otherwise `blob` (base64).
+  - A `uri` that is a resource's wins over a template that matches it.
   - An exception gives JSON-RPC error -32603.
 - **Prompt.**
   - A String gives one user message.
@@ -122,20 +130,33 @@ The body out becomes the result:
 
 ## Authentication
 
-With `auth`, every request needs `Authorization: Bearer <token>`. Camel's token validation (camel-oauth) checks:
+With `auth`, every request needs `Authorization: Bearer <token>`. The token is validated by the camel-oauth **named
+profile** in `auth.oauthProfile`, configured with `camel.oauth.<profile>.*` keys in `application.properties` (the
+same profiles platform-http's `oauthProfile` uses; never the default `camel.oauth.*`):
 
-- the signature, against the issuer's JWKS (found through `<issuer>/.well-known/openid-configuration`, cached);
-- `iss`, `aud`, `exp` and `nbf`.
+```properties
+camel.oauth.mcp.base-uri={{configmap:keycloak/realm-url}}
+camel.oauth.mcp.expected-audience=crm-mcp
+```
 
-Scopes are read from the `scope` and `scp` claims. A plain-http issuer is accepted (a development setup).
+- `base-uri` (the issuer: its `/.well-known/openid-configuration` gives the JWKS) or `expected-issuer` with
+  `jwks-endpoint`; `expected-audience` (unless `allow-missing-audience=true`). Optional: `clock-skew-seconds`,
+  `allowed-jws-algorithms`, `expected-token-type`, introspection (`introspection-endpoint`, `client-id`,
+  `client-secret`), `allow-insecure-http=true` for a plain-http identity provider (development only).
+- camel-oauth checks the signature (JWKS, refreshed on an unknown `kid`), `iss`, `aud`, `exp`/`nbf` and the
+  algorithm. The profile is checked when the context starts.
+- Scopes are read from the `scope` and `scp` claims.
+
+Responses:
 
 - No token or an invalid one → 401 with `WWW-Authenticate: Bearer resource_metadata="…", scope="…"`
-  (`error="invalid_token"` when a token was sent).
+  (`error="invalid_token"` and an `error_description` such as `The token has expired` when a token was sent).
+- The token cannot be checked (the identity provider is unreachable) → 503.
 - Missing `auth.scopes` → 403 with `error="insufficient_scope"`.
-- A capability's `scopes` come on top of `auth.scopes`. The lists show only the capabilities the caller's scopes
-  allow; a call without them → 403.
-- Protected resource metadata (RFC 9728): `GET /.well-known/oauth-protected-resource` (and `…/mcp`). The resource
-  URL follows `X-Forwarded-Proto` and `X-Forwarded-Host`.
+- The lists are not filtered by scope. A route that needs a finer check reads the `McpScopes` header.
+- Protected resource metadata (RFC 9728): `GET /.well-known/oauth-protected-resource` (and `…/mcp`).
+  `authorization_servers` is the profile's issuer. The resource URL follows `X-Forwarded-Proto` and
+  `X-Forwarded-Host`.
 
 ## Build
 

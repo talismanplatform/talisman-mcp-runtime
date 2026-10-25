@@ -25,28 +25,35 @@ import com.networknt.schema.Schema;
  * {@code mcp-server.json} after placeholder resolution and validation. Maps keep the file's order.
  */
 record McpServerDefinition(Info info, Auth auth, Map<String, Tool> tools, Map<String, Resource> resources,
-        Map<String, Prompt> prompts) {
+        Map<String, ResourceTemplate> resourceTemplates, Map<String, Prompt> prompts) {
 
     record Info(String name, String version, String title, String description, String instructions) {
     }
 
-    record Auth(String issuer, String audience, List<String> scopes) {
+    /**
+     * @param oauthProfile the camel-oauth profile ({@code camel.oauth.<profile>.*}) that validates the token
+     * @param scopes       the scopes the token must have for every call
+     */
+    record Auth(String oauthProfile, List<String> scopes) {
     }
 
-    /** A capability: a name, the route that implements it and the scopes it needs on top of {@code auth.scopes}. */
+    /** A capability: a name and the route that implements it. */
     interface Capability {
         String name();
 
         String route();
+    }
 
-        List<String> scopes();
+    /** What {@code resources/read} needs of a resource or a resource template. */
+    interface Readable extends Capability {
+        String mimeType();
     }
 
     /**
      * @param paramHeaders the {@code x-mcp-header} annotations of {@code inputSchema}
      */
     record Tool(String name, String route, String title, String description, ObjectNode inputSchema,
-            ObjectNode outputSchema, ObjectNode annotations, List<String> scopes, Schema inputValidator,
+            ObjectNode outputSchema, ObjectNode annotations, Schema inputValidator,
             Schema outputValidator, List<ParamHeader> paramHeaders) implements Capability {
     }
 
@@ -59,13 +66,18 @@ record McpServerDefinition(Info info, Auth auth, Map<String, Tool> tools, Map<St
     record ParamHeader(String header, List<String> path, String type) {
     }
 
-    /** A resource with either a fixed {@code uri} or a {@code uriTemplate}. */
-    record Resource(String name, String route, String uri, UriTemplate uriTemplate, String mimeType,
-            String description, List<String> scopes) implements Capability {
+    /** A fixed resource; {@code mimeType} may be {@code null}. */
+    record Resource(String name, String route, String uri, String title, String description, String mimeType)
+            implements Readable {
     }
 
-    record Prompt(String name, String route, String description, List<PromptArgument> arguments,
-            List<String> scopes) implements Capability {
+    /** A family of resources; {@code mimeType} may be {@code null}. */
+    record ResourceTemplate(String name, String route, UriTemplate uriTemplate, String title, String description,
+            String mimeType) implements Readable {
+    }
+
+    record Prompt(String name, String route, String description, List<PromptArgument> arguments)
+            implements Capability {
     }
 
     record PromptArgument(String name, String description, boolean required) {

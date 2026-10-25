@@ -56,14 +56,15 @@ final class McpRoutes extends RouteBuilder {
         Message message = exchange.getMessage();
         Map<String, Object> headers = McpEndpoint.requestHeaders(message);
         McpServer.State state = server.state();
-        Auth auth = state == null ? null : state.definition().auth();
-        if (auth == null) {
+        McpAuthenticator authenticator = state == null ? null : state.authenticator();
+        if (authenticator == null) {
             McpEndpoint.write(message, new Response(404, Map.of(), null));
             return;
         }
         ObjectNode metadata = McpResults.MAPPER.createObjectNode();
         metadata.put("resource", McpEndpoint.baseUrl(headers) + "/mcp");
-        metadata.putArray("authorization_servers").add(auth.issuer());
+        Auth auth = authenticator.getAuth();
+        metadata.putArray("authorization_servers").add(authenticator.getIssuer());
         if (!auth.scopes().isEmpty()) {
             auth.scopes().forEach(metadata.putArray("scopes_supported")::add);
         }

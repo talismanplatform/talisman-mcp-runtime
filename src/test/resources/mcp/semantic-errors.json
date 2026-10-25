@@ -1,6 +1,5 @@
 {
   "info": { "name": "broken", "version": "1.0.0" },
-  "auth": { "issuer": "ftp://issuer", "audience": "x" },
   "tools": {
     "badSchema": {
       "route": "direct:a",
@@ -26,8 +25,10 @@
   "resources": {
     "one": { "route": "direct:a", "uri": "same://x", "description": "One", "mimeType": "text/plain" },
     "two": { "route": "direct:a", "uri": "same://x", "description": "Two", "mimeType": "text/plain" },
-    "noScheme": { "route": "direct:a", "uri": "relative/path", "description": "No scheme", "mimeType": "text/plain" },
-    "fixedTemplate": { "route": "direct:a", "uriTemplate": "x://fixed", "description": "No variable", "mimeType": "text/plain" }
+    "noScheme": { "route": "direct:a", "uri": "relative/path", "description": "No scheme", "mimeType": "text/plain" }
+  },
+  "resourceTemplates": {
+    "fixedTemplate": { "route": "direct:a", "uriTemplate": "x://fixed", "description": "No variable" }
   },
   "prompts": {
     "dup": {

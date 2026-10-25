@@ -63,7 +63,10 @@ class McpAuthTest {
         serve("/realms/test/.well-known/openid-configuration", discovery);
         serve("/realms/test/certs", jwks);
         issuerServer.start();
-        server = McpTestServer.start("mcp/auth.json", Map.of("test.issuer", issuer));
+        server = McpTestServer.start("mcp/auth.json", Map.of(
+                "camel.oauth.mcp.base-uri", issuer,
+                "camel.oauth.mcp.expected-audience", "mcp-test",
+                "camel.oauth.mcp.allow-insecure-http", "true"));
     }
 
     private static void serve(String path, String json) {
@@ -116,16 +119,31 @@ class McpAuthTest {
 
     @Test
     void invalidTokens() throws Exception {
-        assertInvalidToken(server.call("tools/list", null, "Authorization", token(otherKey, "mcp-test", "mcp", 300)));
-        assertInvalidToken(server.call("tools/list", null, "Authorization", token(key, "other-audience", "mcp", 300)));
-        assertInvalidToken(server.call("tools/list", null, "Authorization", token(key, "mcp-test", "mcp", -600)));
-        assertInvalidToken(server.call("tools/list", null, "Authorization", "Bearer not-a-jwt"));
+        assertInvalidToken(server.call("tools/list", null, "Authorization", token(otherKey, "mcp-test", "mcp", 300)),
+                "The token's signature is not valid");
+        assertInvalidToken(server.call("tools/list", null, "Authorization", "Bearer not-a-jwt"),
+                "The token is not valid");
     }
 
-    private static void assertInvalidToken(Reply reply) {
+    @Test
+    void wrongAudience() throws Exception {
+        assertInvalidToken(server.call("tools/list", null, "Authorization", token(key, "account", "mcp", 300)),
+                "The token is for another audience");
+    }
+
+    @Test
+    void expiredToken() throws Exception {
+        assertInvalidToken(server.call("tools/list", null, "Authorization", token(key, "mcp-test", "mcp", -600)),
+                "The token has expired");
+    }
+
+    private static void assertInvalidToken(Reply reply, String description) {
         assertEquals(401, reply.status());
-        assertTrue(reply.header("WWW-Authenticate").contains("error=\"invalid_token\""),
-                reply.header("WWW-Authenticate"));
+        String challenge = reply.header("WWW-Authenticate");
+        assertTrue(challenge.startsWith("Bearer resource_metadata=\""), challenge);
+        assertTrue(challenge.contains("scope=\"mcp\""), challenge);
+        assertTrue(challenge.contains("error=\"invalid_token\""), challenge);
+        assertTrue(challenge.endsWith("error_description=\"" + description + "\""), challenge);
     }
 
     @Test
@@ -142,7 +160,7 @@ class McpAuthTest {
     }
 
     @Test
-    void serverScopesAreRequired() throws Exception {
+    void missingScopeIsForbidden() throws Exception {
         Reply reply = server.call("tools/list", null, "Authorization", token("other"));
         assertEquals(403, reply.status());
         String challenge = reply.header("WWW-Authenticate");
@@ -151,17 +169,10 @@ class McpAuthTest {
     }
 
     @Test
-    void capabilityScopesFilterTheListAndGuardTheCall() throws Exception {
+    void listsAreNotFilteredByScope() throws Exception {
         JsonNode tools = server.call("tools/list", null, "Authorization", token("mcp")).result().path("tools");
-        assertEquals(1, tools.size());
-        assertEquals("headers", tools.get(0).path("name").asText());
-        Reply denied = server.call("tools/call", params("name", "admin"), "Authorization", token("mcp"));
-        assertEquals(403, denied.status());
-        assertTrue(denied.header("WWW-Authenticate").contains("scope=\"mcp admin\""),
-                denied.header("WWW-Authenticate"));
-        assertEquals(2, server.call("tools/list", null, "Authorization", token("mcp admin")).result()
-                .path("tools").size());
-        assertEquals(200, server.call("tools/call", params("name", "admin"), "Authorization", token("mcp admin"))
+        assertEquals(2, tools.size());
+        assertEquals(200, server.call("tools/call", params("name", "admin"), "Authorization", token("mcp"))
                 .status());
     }
 

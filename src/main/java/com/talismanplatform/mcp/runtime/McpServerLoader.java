@@ -36,9 +36,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import com.networknt.schema.Error;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
@@ -54,6 +52,7 @@ import com.talismanplatform.mcp.runtime.McpServerDefinition.ParamHeader;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Prompt;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.PromptArgument;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Resource;
+import com.talismanplatform.mcp.runtime.McpServerDefinition.ResourceTemplate;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Tool;
 
 /**
@@ -84,11 +83,8 @@ final class McpServerLoader {
     static McpServerDefinition load(CamelContext context, String file) {
         JsonNode root = read(context, file);
         List<String> problems = new ArrayList<>();
-        root = resolvePlaceholders(context, root, "$", problems);
-        if (problems.isEmpty()) {
-            for (Error error : fileSchema().validate(root)) {
-                problems.add(describe("$", error));
-            }
+        for (Error error : fileSchema().validate(root)) {
+            problems.add(describe("$", error));
         }
         if (!problems.isEmpty()) {
             throw new McpDefinitionException(file, problems);
@@ -116,6 +112,7 @@ final class McpServerLoader {
         List<String> problems = new ArrayList<>();
         checkRoutes("tools", definition.tools(), consumers, problems);
         checkRoutes("resources", definition.resources(), consumers, problems);
+        checkRoutes("resourceTemplates", definition.resourceTemplates(), consumers, problems);
         checkRoutes("prompts", definition.prompts(), consumers, problems);
         if (!problems.isEmpty()) {
             throw new McpDefinitionException(file, problems);
@@ -130,6 +127,15 @@ final class McpServerLoader {
                         + capability.route());
             }
         });
+    }
+
+    /** What is allowed but probably a mistake: a name used for a resource and a resource template. */
+    static List<String> warnings(McpServerDefinition definition) {
+        List<String> warnings = new ArrayList<>();
+        definition.resourceTemplates().keySet().stream().filter(definition.resources()::containsKey)
+                .forEach(name -> warnings.add(path(path("$", "resourceTemplates"), name) + ": " + name
+                        + " is also the name of a resource"));
+        return warnings;
     }
 
     /** {@code direct:foo}, {@code direct://foo} and {@code direct://foo?x=y} are all {@code foo}. */
@@ -163,35 +169,6 @@ final class McpServerLoader {
         }
     }
 
-    /** Resolves {@code {{key}}} in every string value (not in keys) against the integration's properties. */
-    private static JsonNode resolvePlaceholders(CamelContext context, JsonNode node, String path,
-            List<String> problems) {
-        if (node.isTextual()) {
-            String text = node.textValue();
-            if (!text.contains("{{")) {
-                return node;
-            }
-            try {
-                return TextNode.valueOf(context.resolvePropertyPlaceholders(text));
-            } catch (RuntimeException e) {
-                problems.add(path + ": " + e.getMessage());
-                return node;
-            }
-        }
-        if (node.isObject()) {
-            ObjectNode object = (ObjectNode) node;
-            for (Map.Entry<String, JsonNode> field : object.properties()) {
-                field.setValue(resolvePlaceholders(context, field.getValue(), path(path, field.getKey()), problems));
-            }
-        } else if (node.isArray()) {
-            ArrayNode array = (ArrayNode) node;
-            for (int i = 0; i < array.size(); i++) {
-                array.set(i, resolvePlaceholders(context, array.get(i), path + "[" + i + "]", problems));
-            }
-        }
-        return node;
-    }
-
     private static McpServerDefinition build(ObjectNode root, List<String> problems) {
         JsonNode info = root.get("info");
         Info serverInfo = new Info(text(info, "name"), text(info, "version"), text(info, "title"),
@@ -200,8 +177,7 @@ final class McpServerLoader {
         Auth auth = null;
         JsonNode authNode = root.get("auth");
         if (authNode != null) {
-            auth = new Auth(text(authNode, "issuer"), text(authNode, "audience"), strings(authNode.get("scopes")));
-            checkIssuer(auth.issuer(), problems);
+            auth = new Auth(text(authNode, "oauthProfile"), strings(authNode.get("scopes")));
         }
 
         Map<String, Tool> tools = new LinkedHashMap<>();
@@ -213,8 +189,7 @@ final class McpServerLoader {
             Schema outputValidator = output == null ? null : compile(output, path(path, "outputSchema"), problems);
             List<ParamHeader> headers = paramHeaders(input, path(path, "inputSchema"), problems);
             tools.put(name, new Tool(name, text(node, "route"), text(node, "title"), text(node, "description"),
-                    input, output, (ObjectNode) node.get("annotations"), strings(node.get("scopes")),
-                    inputValidator, outputValidator, headers));
+                    input, output, (ObjectNode) node.get("annotations"), inputValidator, outputValidator, headers));
         });
 
         Map<String, Resource> resources = new LinkedHashMap<>();
@@ -222,23 +197,27 @@ final class McpServerLoader {
         forEach(root.get("resources"), (name, node) -> {
             String path = path(path("$", "resources"), name);
             String uri = text(node, "uri");
-            UriTemplate template = null;
-            if (uri != null) {
-                checkUri(uri, path(path, "uri"), problems);
-                String other = uris.putIfAbsent(uri, name);
-                if (other != null) {
-                    problems.add(path(path, "uri") + ": " + uri + " is also the uri of resource " + other);
-                }
-            } else {
-                String templateText = text(node, "uriTemplate");
-                try {
-                    template = UriTemplate.parse(templateText);
-                } catch (IllegalArgumentException e) {
-                    problems.add(path(path, "uriTemplate") + ": " + templateText + " " + e.getMessage());
-                }
+            checkUri(uri, path(path, "uri"), problems);
+            String other = uris.putIfAbsent(uri, name);
+            if (other != null) {
+                problems.add(path(path, "uri") + ": " + uri + " is also the uri of resource " + other);
             }
-            resources.put(name, new Resource(name, text(node, "route"), uri, template, text(node, "mimeType"),
-                    text(node, "description"), strings(node.get("scopes"))));
+            resources.put(name, new Resource(name, text(node, "route"), uri, text(node, "title"),
+                    text(node, "description"), text(node, "mimeType")));
+        });
+
+        Map<String, ResourceTemplate> templates = new LinkedHashMap<>();
+        forEach(root.get("resourceTemplates"), (name, node) -> {
+            String path = path(path("$", "resourceTemplates"), name);
+            String templateText = text(node, "uriTemplate");
+            UriTemplate template = null;
+            try {
+                template = UriTemplate.parse(templateText);
+            } catch (IllegalArgumentException e) {
+                problems.add(path(path, "uriTemplate") + ": " + templateText + " " + e.getMessage());
+            }
+            templates.put(name, new ResourceTemplate(name, text(node, "route"), template, text(node, "title"),
+                    text(node, "description"), text(node, "mimeType")));
         });
 
         Map<String, Prompt> prompts = new LinkedHashMap<>();
@@ -260,22 +239,10 @@ final class McpServerLoader {
                 }
             }
             prompts.put(name, new Prompt(name, text(node, "route"), text(node, "description"),
-                    List.copyOf(arguments), strings(node.get("scopes"))));
+                    List.copyOf(arguments)));
         });
 
-        return new McpServerDefinition(serverInfo, auth, tools, resources, prompts);
-    }
-
-    private static void checkIssuer(String issuer, List<String> problems) {
-        try {
-            URI uri = new URI(issuer);
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            if (!(scheme.equals("https") || scheme.equals("http")) || uri.getHost() == null) {
-                problems.add("$.auth.issuer: " + issuer + " is not an http(s) URL");
-            }
-        } catch (URISyntaxException e) {
-            problems.add("$.auth.issuer: " + issuer + " is not a URL: " + e.getMessage());
-        }
+        return new McpServerDefinition(serverInfo, auth, tools, resources, templates, prompts);
     }
 
     private static void checkUri(String value, String path, List<String> problems) {

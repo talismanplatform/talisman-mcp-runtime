@@ -16,7 +16,6 @@
 package com.talismanplatform.mcp.runtime;
 
 import java.util.List;
-import java.util.Properties;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.builder.RouteBuilder;
@@ -26,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,18 +51,25 @@ class McpServerLoaderTest {
         assertEquals(List.of("greet", "add", "wrongOutput", "fail", "headers", "region"),
                 List.copyOf(definition.tools().keySet()));
         assertEquals(3, definition.tools().get("region").paramHeaders().size());
-        assertEquals("customer://{id}", definition.resources().get("customer").uriTemplate().toString());
+        assertEquals("customer://{id}", definition.resourceTemplates().get("customer").uriTemplate().toString());
+        assertEquals("Configuration", definition.resources().get("config").title());
+        assertNull(definition.resources().get("untyped").mimeType());
+        assertTrue(McpServerLoader.warnings(definition).isEmpty());
         assertTrue(definition.prompts().get("review").arguments().get(0).required());
     }
 
     @Test
-    void resolvesPropertyPlaceholders() {
-        Properties properties = new Properties();
-        properties.setProperty("server.name", "from-properties");
-        context.getPropertiesComponent().setInitialProperties(properties);
-        McpServerDefinition definition = McpServerLoader.load(context, "mcp/placeholders.json");
-        assertEquals("from-properties", definition.info().name());
-        assertEquals("2.0.0", definition.info().version());
+    void placeholdersAreNotResolved() {
+        McpServerDefinition definition = McpServerLoader.load(context, "mcp/auth.json");
+        assertEquals("mcp", definition.auth().oauthProfile());
+        assertEquals(List.of("mcp"), definition.auth().scopes());
+    }
+
+    @Test
+    void aNameInBothResourceSectionsIsAWarning() {
+        McpServerDefinition definition = McpServerLoader.load(context, "mcp/warnings.json");
+        assertEquals(List.of("$.resourceTemplates.customer: customer is also the name of a resource"),
+                McpServerLoader.warnings(definition));
     }
 
     @Test
@@ -93,12 +100,15 @@ class McpServerLoaderTest {
         assertTrue(problems.contains("$.tools['bad name'].route: does not match"), problems);
         assertTrue(problems.contains("$.tools['bad name'].inputSchema.type: must be the constant value 'object'"),
                 problems);
+        assertTrue(problems.contains("$.tools['bad name']: property 'scopes' is not defined"), problems);
+        assertTrue(problems.contains("$.resources.family: required property 'uri' not found"), problems);
+        assertTrue(problems.contains("$.resourceTemplates.fixed: required property 'uriTemplate' not found"), problems);
+        assertTrue(problems.contains("$.auth: required property 'oauthProfile' not found"), problems);
     }
 
     @Test
     void semanticErrors() {
         String problems = String.join("\n", problems("mcp/semantic-errors.json"));
-        assertTrue(problems.contains("$.auth.issuer: ftp://issuer is not an http(s) URL"), problems);
         assertTrue(problems.contains("$.tools.badSchema.inputSchema.properties.a.type: "), problems);
         assertTrue(problems.contains("x-mcp-header same is used twice"), problems);
         assertTrue(problems.contains("$.tools.badHeaders.inputSchema.properties.c['x-mcp-header']: the property's type"),
@@ -108,7 +118,7 @@ class McpServerLoaderTest {
         assertTrue(!problems.contains("Data"), problems);
         assertTrue(problems.contains("$.resources.two.uri: same://x is also the uri of resource one"), problems);
         assertTrue(problems.contains("$.resources.noScheme.uri: relative/path has no scheme"), problems);
-        assertTrue(problems.contains("$.resources.fixedTemplate.uriTemplate"), problems);
+        assertTrue(problems.contains("$.resourceTemplates.fixedTemplate.uriTemplate"), problems);
         assertTrue(problems.contains("$.prompts.dup.arguments[1].name"), problems);
     }
 

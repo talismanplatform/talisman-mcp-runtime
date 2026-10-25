@@ -36,7 +36,6 @@ import org.apache.camel.StreamCache;
 import org.apache.camel.WrappedFile;
 
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Prompt;
-import com.talismanplatform.mcp.runtime.McpServerDefinition.Resource;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Tool;
 
 /**
@@ -112,20 +111,25 @@ final class McpResults {
 
     /**
      * {@code ReadResourceResult}: text for a textual {@code mimeType} (Map/List/POJO as JSON), otherwise a base64
-     * {@code blob}; a String body is always text.
+     * {@code blob}; a String body is always text. Without a declared {@code mimeType}, the route's
+     * {@code Content-Type} is the type; without either, the content has no type and other bodies are a blob.
      */
-    static ObjectNode resourceResult(Exchange exchange, Resource resource, String uri) {
+    static ObjectNode resourceResult(Exchange exchange, String declaredMimeType, String uri) {
         Object body = exchange.getMessage().getBody();
+        String mimeType = declaredMimeType != null ? declaredMimeType
+                : exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
         ObjectNode item = MAPPER.createObjectNode();
         item.put("uri", uri);
-        item.put("mimeType", resource.mimeType());
+        if (mimeType != null) {
+            item.put("mimeType", mimeType);
+        }
         if (body == null) {
             item.put("text", "");
         } else if (body instanceof CharSequence || isScalar(body)) {
             item.put("text", String.valueOf(body));
         } else if (!isTextLike(body)) {
             item.put("text", MAPPER.valueToTree(body).toString());
-        } else if (isTextual(resource.mimeType())) {
+        } else if (mimeType != null && isTextual(mimeType)) {
             item.put("text", exchange.getContext().getTypeConverter().convertTo(String.class, exchange, body));
         } else {
             byte[] bytes = exchange.getContext().getTypeConverter().convertTo(byte[].class, exchange, body);

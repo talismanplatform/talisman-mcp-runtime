@@ -148,12 +148,15 @@ class McpEndpointTest {
     @Test
     void listResourcesAndTemplates() throws Exception {
         JsonNode resources = server.call("resources/list", null).result().path("resources");
-        assertEquals(2, resources.size());
+        assertEquals(3, resources.size());
         assertEquals("config://app", resources.get(0).path("uri").asText());
+        assertEquals("Configuration", resources.get(0).path("title").asText());
         assertEquals("text/plain", resources.get(0).path("mimeType").asText());
+        assertFalse(resources.get(2).has("mimeType"));
         JsonNode templates = server.call("resources/templates/list", null).result().path("resourceTemplates");
         assertEquals(1, templates.size());
         assertEquals("customer://{id}", templates.get(0).path("uriTemplate").asText());
+        assertEquals("Customer", templates.get(0).path("title").asText());
     }
 
     @Test
@@ -161,6 +164,14 @@ class McpEndpointTest {
         JsonNode content = server.call("resources/read", params("uri", "config://app")).result().path("contents").get(0);
         assertEquals("config://app", content.path("uri").asText());
         assertEquals("key=value", content.path("text").asText());
+    }
+
+    @Test
+    void readUntypedResource() throws Exception {
+        JsonNode content = server.call("resources/read", params("uri", "config://untyped")).result()
+                .path("contents").get(0);
+        assertEquals("key=value", content.path("text").asText());
+        assertFalse(content.has("mimeType"));
     }
 
     @Test

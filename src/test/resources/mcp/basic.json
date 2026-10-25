@@ -63,20 +63,29 @@
     "config": {
       "route": "direct:config",
       "uri": "config://app",
+      "title": "Configuration",
       "description": "The configuration",
       "mimeType": "text/plain"
-    },
-    "customer": {
-      "route": "direct:customer",
-      "uriTemplate": "customer://{id}",
-      "description": "A customer",
-      "mimeType": "application/json"
     },
     "logo": {
       "route": "direct:logo",
       "uri": "file:///logo.png",
       "description": "The logo",
       "mimeType": "image/png"
+    },
+    "untyped": {
+      "route": "direct:config",
+      "uri": "config://untyped",
+      "description": "Has no mimeType"
+    }
+  },
+  "resourceTemplates": {
+    "customer": {
+      "route": "direct:customer",
+      "uriTemplate": "customer://{id}",
+      "title": "Customer",
+      "description": "A customer",
+      "mimeType": "application/json"
     }
   },
   "prompts": {

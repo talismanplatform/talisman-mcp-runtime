@@ -115,7 +115,9 @@
       "uri": "test://static-binary",
       "description": "A binary resource",
       "mimeType": "image/png"
-    },
+    }
+  },
+  "resourceTemplates": {
     "template": {
       "route": "direct:customer",
       "uriTemplate": "test://template/{id}/data",

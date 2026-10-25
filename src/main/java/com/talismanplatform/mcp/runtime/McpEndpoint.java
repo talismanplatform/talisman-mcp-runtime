@@ -43,11 +43,14 @@ import org.slf4j.LoggerFactory;
 
 import com.talismanplatform.mcp.runtime.McpAuthenticator.Caller;
 import com.talismanplatform.mcp.runtime.McpAuthenticator.Unauthorized;
+import com.talismanplatform.mcp.runtime.McpAuthenticator.Unavailable;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Capability;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.ParamHeader;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Prompt;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.PromptArgument;
+import com.talismanplatform.mcp.runtime.McpServerDefinition.Readable;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Resource;
+import com.talismanplatform.mcp.runtime.McpServerDefinition.ResourceTemplate;
 import com.talismanplatform.mcp.runtime.McpServerDefinition.Tool;
 
 /**
@@ -335,6 +338,9 @@ final class McpEndpoint implements Processor {
                         .append(quoted(e.getMessage())).append('"');
             }
             throw new Rejected(new Response(401, Map.of("WWW-Authenticate", challenge.toString()), null));
+        } catch (Unavailable e) {
+            throw new Rejected(Response.of(503, error(null, McpError.INTERNAL_ERROR,
+                    "The token cannot be checked now", null)));
         }
         requireScopes(caller, authenticator.getAuth().scopes(), headers);
         return caller;
@@ -347,17 +353,6 @@ final class McpEndpoint implements Processor {
         String challenge = "Bearer error=\"insufficient_scope\", scope=\"" + String.join(" ", scopes)
                 + "\", resource_metadata=\"" + metadataUrl(headers) + "\"";
         throw new Rejected(new Response(403, Map.of("WWW-Authenticate", challenge), null));
-    }
-
-    private void requireScopes(McpServer.State state, Caller caller, Capability capability,
-            Map<String, Object> headers) {
-        if (caller != null && !capability.scopes().isEmpty()) {
-            requireScopes(caller, McpServer.union(state.definition().auth().scopes(), capability.scopes()), headers);
-        }
-    }
-
-    private static boolean visible(Caller caller, Capability capability) {
-        return caller == null || caller.hasScopes(capability.scopes());
     }
 
     static String baseUrl(Map<String, Object> headers) {
@@ -391,10 +386,9 @@ final class McpEndpoint implements Processor {
         return switch (method) {
             case "server/discover" -> discover(definition);
             case "tools/list" -> list("tools", definition.tools(), caller, McpEndpoint::toolEntry);
-            case "resources/list" -> list("resources", filter(definition.resources(), r -> r.uri() != null),
-                    caller, McpEndpoint::resourceEntry);
-            case "resources/templates/list" -> list("resourceTemplates",
-                    filter(definition.resources(), r -> r.uriTemplate() != null), caller, McpEndpoint::templateEntry);
+            case "resources/list" -> list("resources", definition.resources(), caller, McpEndpoint::resourceEntry);
+            case "resources/templates/list" -> list("resourceTemplates", definition.resourceTemplates(), caller,
+                    McpEndpoint::templateEntry);
             case "prompts/list" -> list("prompts", definition.prompts(), caller, McpEndpoint::promptEntry);
             case "tools/call" -> callTool(state, caller, params, headers, correlationId);
             case "resources/read" -> readResource(state, caller, params, headers, correlationId);
@@ -410,7 +404,7 @@ final class McpEndpoint implements Processor {
         if (!definition.tools().isEmpty()) {
             capabilities.putObject("tools");
         }
-        if (!definition.resources().isEmpty()) {
+        if (!definition.resources().isEmpty() || !definition.resourceTemplates().isEmpty()) {
             capabilities.putObject("resources");
         }
         if (!definition.prompts().isEmpty()) {
@@ -433,7 +427,7 @@ final class McpEndpoint implements Processor {
             Function<C, ObjectNode> entry) {
         ObjectNode result = McpResults.MAPPER.createObjectNode();
         ArrayNode items = result.putArray(field);
-        capabilities.values().stream().filter(c -> visible(caller, c)).map(entry).forEach(items::add);
+        capabilities.values().stream().map(entry).forEach(items::add);
         result.put("ttlMs", 0);
         result.put("cacheScope", caller == null ? "public" : "private");
         return result;
@@ -442,16 +436,6 @@ final class McpEndpoint implements Processor {
     private static void cacheable(ObjectNode result, McpServerDefinition definition) {
         result.put("ttlMs", 0);
         result.put("cacheScope", definition.auth() == null ? "public" : "private");
-    }
-
-    private static <C> Map<String, C> filter(Map<String, C> map, java.util.function.Predicate<C> predicate) {
-        Map<String, C> filtered = new LinkedHashMap<>();
-        map.forEach((k, v) -> {
-            if (predicate.test(v)) {
-                filtered.put(k, v);
-            }
-        });
-        return filtered;
     }
 
     private static ObjectNode toolEntry(Tool tool) {
@@ -473,17 +457,19 @@ final class McpEndpoint implements Processor {
         ObjectNode entry = McpResults.MAPPER.createObjectNode();
         entry.put("uri", resource.uri());
         entry.put("name", resource.name());
+        putIfSet(entry, "title", resource.title());
         entry.put("description", resource.description());
-        entry.put("mimeType", resource.mimeType());
+        putIfSet(entry, "mimeType", resource.mimeType());
         return entry;
     }
 
-    private static ObjectNode templateEntry(Resource resource) {
+    private static ObjectNode templateEntry(ResourceTemplate template) {
         ObjectNode entry = McpResults.MAPPER.createObjectNode();
-        entry.put("uriTemplate", resource.uriTemplate().toString());
-        entry.put("name", resource.name());
-        entry.put("description", resource.description());
-        entry.put("mimeType", resource.mimeType());
+        entry.put("uriTemplate", template.uriTemplate().toString());
+        entry.put("name", template.name());
+        putIfSet(entry, "title", template.title());
+        entry.put("description", template.description());
+        putIfSet(entry, "mimeType", template.mimeType());
         return entry;
     }
 
@@ -510,7 +496,6 @@ final class McpEndpoint implements Processor {
         if (tool == null) {
             throw McpError.invalidParams("Unknown tool: " + name);
         }
-        requireScopes(state, caller, tool, headers);
         JsonNode arguments = params.get("arguments");
         if (arguments == null || arguments.isNull()) {
             arguments = McpResults.MAPPER.createObjectNode();
@@ -537,7 +522,8 @@ final class McpEndpoint implements Processor {
         if (uri == null) {
             throw McpError.invalidParams("params.uri is required");
         }
-        Resource resource = null;
+        // a fixed resource wins over a template that matches the same uri
+        Readable resource = null;
         Map<String, String> variables = Map.of();
         for (Resource candidate : state.definition().resources().values()) {
             if (uri.equals(candidate.uri())) {
@@ -546,8 +532,8 @@ final class McpEndpoint implements Processor {
             }
         }
         if (resource == null) {
-            for (Resource candidate : state.definition().resources().values()) {
-                Map<String, String> match = candidate.uriTemplate() == null ? null : candidate.uriTemplate().match(uri);
+            for (ResourceTemplate candidate : state.definition().resourceTemplates().values()) {
+                Map<String, String> match = candidate.uriTemplate().match(uri);
                 if (match != null) {
                     resource = candidate;
                     variables = match;
@@ -555,18 +541,17 @@ final class McpEndpoint implements Processor {
                 }
             }
         }
-        if (resource == null || !visible(caller, resource)) {
+        if (resource == null) {
             ObjectNode data = McpResults.MAPPER.createObjectNode().put("uri", uri);
             throw new McpError(McpError.INVALID_PARAMS, "Resource not found", 200, data);
         }
-        requireScopes(state, caller, resource, headers);
         Exchange result = call(resource, "resources/read", new LinkedHashMap<>(variables), caller, uri, headers,
                 correlationId);
         if (result.getException() != null) {
             LOG.warn("Resource {} failed", resource.name(), result.getException());
             throw new McpError(McpError.INTERNAL_ERROR, messageOf(result.getException()), 200, null);
         }
-        ObjectNode readResult = McpResults.resourceResult(result, resource, uri);
+        ObjectNode readResult = McpResults.resourceResult(result, resource.mimeType(), uri);
         cacheable(readResult, state.definition());
         return readResult;
     }
@@ -578,7 +563,6 @@ final class McpEndpoint implements Processor {
         if (prompt == null) {
             throw McpError.invalidParams("Unknown prompt: " + name);
         }
-        requireScopes(state, caller, prompt, headers);
         JsonNode arguments = params.path("arguments");
         if (!arguments.isMissingNode() && !arguments.isNull() && !arguments.isObject()) {
             throw McpError.invalidParams("params.arguments must be an object");
