@@ -510,7 +510,7 @@ final class McpEndpoint implements Processor {
         }
         Exchange result = call(tool, "tools/call", toMap(arguments), caller, null, headers, correlationId);
         if (result.getException() != null) {
-            LOG.warn("Tool {} failed", tool.name(), result.getException());
+            logFailure("Tool", tool.name(), result);
             return McpResults.toolError(messageOf(result.getException()));
         }
         return McpResults.toolResult(result, tool);
@@ -548,7 +548,7 @@ final class McpEndpoint implements Processor {
         Exchange result = call(resource, "resources/read", new LinkedHashMap<>(variables), caller, uri, headers,
                 correlationId);
         if (result.getException() != null) {
-            LOG.warn("Resource {} failed", resource.name(), result.getException());
+            logFailure("Resource", resource.name(), result);
             throw new McpError(McpError.INTERNAL_ERROR, messageOf(result.getException()), 200, null);
         }
         ObjectNode readResult = McpResults.resourceResult(result, resource.mimeType(), uri);
@@ -584,7 +584,7 @@ final class McpEndpoint implements Processor {
         }
         Exchange result = call(prompt, "prompts/get", values, caller, null, headers, correlationId);
         if (result.getException() != null) {
-            LOG.warn("Prompt {} failed", prompt.name(), result.getException());
+            logFailure("Prompt", prompt.name(), result);
             throw new McpError(McpError.INTERNAL_ERROR, messageOf(result.getException()), 200, null);
         }
         try {
@@ -642,6 +642,18 @@ final class McpEndpoint implements Processor {
             error.set("data", McpResults.MAPPER.valueToTree(data));
         }
         return response;
+    }
+
+    /**
+     * Logs a failed capability route once. Camel's error handler, when the route has one, has already logged the
+     * stack trace with the message history, so only a line is added here; without one the stack trace is logged.
+     */
+    private static void logFailure(String kind, String name, Exchange result) {
+        if (result.getExchangeExtension().isErrorHandlerHandledSet()) {
+            LOG.warn("{} {} failed: {}", kind, name, messageOf(result.getException()));
+        } else {
+            LOG.warn("{} {} failed", kind, name, result.getException());
+        }
     }
 
     /** The exception's message only; the stack trace goes to the log. */
