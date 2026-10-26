@@ -262,3 +262,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [Apache License 2.0](LICENSE). Copyright 2026 Talisman Cloud Inc. See [NOTICE](NOTICE).
+
+Apache, Apache Camel and Camel are trademarks of The Apache Software Foundation. This project is not affiliated with
+or endorsed by The Apache Software Foundation.
