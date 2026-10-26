@@ -24,8 +24,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Set the version from the tag
-        run: mvn -B versions:set -DnewVersion="${GITHUB_REF_NAME}" -DgenerateBackupPoms=false
+      # the version is bumped in a commit before tagging: the tag must match pom.xml and the README's examples
+      - name: Check the version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          POM=$(python3 -c "import xml.etree.ElementTree as t; print(t.parse('pom.xml').getroot().find('{http://maven.apache.org/POM/4.0.0}version').text)")
+          FAILED=0
+          if [ "$POM" != "$TAG" ]; then
+            echo "::error file=pom.xml::pom.xml has version $POM, the tag is $TAG"
+            FAILED=1
+          fi
+          OTHERS=$(grep -noE "talisman-mcp-runtime:[0-9][^ ]*|<version>[0-9][^<]*</version>|^\| [0-9]+\.[0-9]+\.x " README.md \
+            | grep -vF -e "talisman-mcp-runtime:$TAG" -e "<version>$TAG</version>" -e "| ${TAG%.*}.x " || true)
+          if [ -n "$OTHERS" ]; then
+            echo "::error file=README.md::README.md has versions other than $TAG:"
+            echo "$OTHERS"
+            FAILED=1
+          fi
+          exit $FAILED
       # a release cannot be undone: tests and the conformance suite run before anything is uploaded
       - name: Verify (tests and conformance)
         run: mvn -B verify -Dmcp.conformance=true

@@ -36,8 +36,11 @@ section 5.
 Versions follow Talisman Platform releases (`26.16.x`). A version published to Maven Central is permanent: a broken
 release is fixed by a new version.
 
-1. Make sure the build on `main` is green, including the conformance job.
-2. Tag and push: `git tag 26.16.0 && git push origin 26.16.0`.
-3. The Release workflow runs the tests and the conformance suite, then signs the artifacts and publishes them to
-   Maven Central (`mvn -Prelease deploy`). A maintainer approves it in the `release` environment.
-4. Create the GitHub release with notes and the Maven coordinates.
+1. Set the new version in `pom.xml` and in the README (the Maven and `camel run` examples, and the compatibility
+   table for a new minor version). Commit and push.
+2. Make sure the build on `main` is green, including the conformance job.
+3. Tag and push: `git tag 26.16.0 && git push origin 26.16.0`.
+4. The Release workflow checks that the tag matches `pom.xml` and the README, runs the tests and the conformance
+   suite, then signs the artifacts and publishes them to Maven Central (`mvn -Prelease deploy`). A maintainer
+   approves it in the `release` environment.
+5. Create the GitHub release with notes and the Maven coordinates.
