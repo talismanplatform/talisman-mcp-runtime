@@ -18,10 +18,14 @@ package com.talismanplatform.mcp.runtime;
 import org.apache.camel.CamelContext;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.spi.ContextServicePlugin;
+import org.apache.camel.support.LifecycleStrategySupport;
 
 /**
  * Entry point, found through {@code META-INF/services}: having the JAR on the classpath makes the integration an
  * MCP server on {@code /mcp}, defined by {@code mcp-server.json} on the classpath.
+ * <p>
+ * Camel loads the plugin while it builds the context, which {@code new DefaultCamelContext()} does inside its
+ * constructor, before the route model exists: the routes are added when the context initializes.
  */
 public class McpContextServicePlugin implements ContextServicePlugin {
 
@@ -30,8 +34,17 @@ public class McpContextServicePlugin implements ContextServicePlugin {
     @Override
     public void load(CamelContext context) {
         server = new McpServer(context);
+        context.addLifecycleStrategy(new LifecycleStrategySupport() {
+            @Override
+            public void onContextInitializing(CamelContext initializing) {
+                try {
+                    initializing.addRoutes(new McpRoutes(server));
+                } catch (Exception e) {
+                    throw RuntimeCamelException.wrapRuntimeCamelException(e);
+                }
+            }
+        });
         try {
-            context.addRoutes(new McpRoutes(server));
             context.addStartupListener(server);
             context.getManagementStrategy().addEventNotifier(server.reloadNotifier());
         } catch (Exception e) {

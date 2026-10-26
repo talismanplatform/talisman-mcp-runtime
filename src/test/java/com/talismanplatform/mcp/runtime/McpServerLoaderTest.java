@@ -20,6 +20,8 @@ import java.util.List;
 import org.apache.camel.CamelContext;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.impl.engine.DefaultContextServiceLoaderPlugin;
+import org.apache.camel.spi.ContextServiceLoaderPluginResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +38,17 @@ class McpServerLoaderTest {
 
     @BeforeEach
     void createContext() {
-        context = new DefaultCamelContext();
+        // the loader on its own: no MCP server, which would need mcp-server.json on the classpath to start
+        context = new DefaultCamelContext() {
+            @Override
+            protected ContextServiceLoaderPluginResolver createContextServiceLoaderPlugin() {
+                return new DefaultContextServiceLoaderPlugin() {
+                    @Override
+                    protected void doStart() {
+                    }
+                };
+            }
+        };
     }
 
     @AfterEach

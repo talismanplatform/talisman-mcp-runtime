@@ -17,13 +17,24 @@ package com.talismanplatform.mcp.runtime;
 
 import java.util.Map;
 
+import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** An invalid definition stops the integration. */
+/** The runtime joins every context; an invalid definition stops the integration. */
 class McpStartupTest {
+
+    @Test
+    void aContextBuiltInItsConstructorGetsTheMcpRoutes() throws Exception {
+        // new DefaultCamelContext() loads the plugin before its route model exists
+        try (DefaultCamelContext context = new DefaultCamelContext()) {
+            context.init();
+            assertNotNull(context.getRouteDefinition(McpRoutes.MCP_ROUTE_ID));
+        }
+    }
 
     @Test
     void missingRouteConsumerStopsStartup() {
