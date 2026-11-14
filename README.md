@@ -77,7 +77,7 @@ Run it with the [Camel CLI](https://camel.apache.org/manual/camel-jbang.html):
 
 ```bash
 camel run greet.camel.yaml mcp-server.json application.properties \
-  --dep=mvn:com.talismanplatform:talisman-mcp-runtime:26.16.0
+  --dep=mvn:com.talismanplatform:talisman-mcp-runtime:26.16.1
 ```
 
 Call the tool:
@@ -101,7 +101,7 @@ In a Maven project, add the dependency instead:
 <dependency>
     <groupId>com.talismanplatform</groupId>
     <artifactId>talisman-mcp-runtime</artifactId>
-    <version>26.16.0</version>
+    <version>26.16.1</version>
 </dependency>
 ```
 

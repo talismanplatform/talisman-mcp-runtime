@@ -22,7 +22,7 @@
 
     <groupId>com.talismanplatform</groupId>
     <artifactId>talisman-mcp-runtime</artifactId>
-    <version>26.16.0</version>
+    <version>26.16.1</version>
     <packaging>jar</packaging>
 
     <name>Talisman MCP Runtime</name>
